@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-Minute Reminder Timer</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f0f0f0;
+            margin: 0;
+        }
+
+        .timer-container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 320px;
+            width: 100%;
+        }
+
+        .progress-ring {
+            display: block;
+            margin: 0 auto 20px;
+        }
+
+        .time {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #fff;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 400px) {
+            .timer-container {
+                padding: 20px;
+            }
+
+            .time {
+                font-size: 2rem;
+            }
+
+            button {
+                padding: 10px 20px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="timer-container">
+        <svg class="progress-ring" width="200" height="200">
+            <circle class="progress-ring__circle" stroke="#6c757d" stroke-width="8" fill="transparent" r="90" cx="100"
+                cy="100" />
+        </svg>
+        <div class="time">10:00</div>
+        <button id="startBtn">Start</button>
+        <button id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <script>
+        const circle = document.querySelector('.progress-ring__circle');
+        const radius = circle.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+
+        circle.style.strokeDasharray = `${circumference} ${circumference}`;
+        circle.style.strokeDashoffset = circumference;
+
+        function setProgress(percent) {
+            const offset = circumference - percent / 100 * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+
+        const timeDisplay = document.querySelector('.time');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+
+        let timer;
+        let timeLeft = 600; // 10 minutes in seconds
+        let isRunning = false;
+        let audioContext;
+        let notificationSound;
+
+        function updateDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            setProgress((600 - timeLeft) / 6);
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                timer = setInterval(() => {
+                    if (timeLeft > 0) {
+                        timeLeft--;
+                        updateDisplay();
+                    } else {
+                        remind();
+                        timeLeft = 600;
+                    }
+                }, 1000);
+            }
+        }
+
+        function stopTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            timeLeft = 600;
+            updateDisplay();
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+
+        function remind() {
+            showNotification();
+            playSound();
+        }
+
+        function showNotification() {
+            if ("Notification" in window) {
+                if (Notification.permission === "granted") {
+                    new Notification("Timer Alert", {
+                        body: "10 minutes have passed!",
+                        icon: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23333' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/%3E%3C/svg%3E"
+                    });
+                } else if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then(function (permission) {
+                        if (permission === "granted") {
+                            showNotification();
+                        }
+                    });
+                }
+            }
+        }
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            notificationSound = audioContext.createOscillator();
+            notificationSound.type = 'sine';
+            notificationSound.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+        }
+
+        function playSound() {
+            if (!audioContext) {
+                initAudio();
+            }
+            const gainNode = audioContext.createGain();
+            notificationSound.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.01);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 8);
+
+            notificationSound.start(audioContext.currentTime);
+            notificationSound.stop(audioContext.currentTime + 8);
+
+            notificationSound = audioContext.createOscillator();
+            notificationSound.type = 'sine';
+            notificationSound.frequency.setValueAtTime(440, audioContext.currentTime);
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudio();
+            }
+            startTimer();
+        });
+        stopBtn.addEventListener('click', stopTimer);
+
+        if ("Notification" in window) {
+            Notification.requestPermission();
+        }
+
+        updateDisplay();
+    </script>
+</body>
+
+</html>
